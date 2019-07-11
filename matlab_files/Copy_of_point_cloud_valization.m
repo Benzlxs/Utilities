@@ -16,7 +16,7 @@ function [ ]=main()
     %point_cloud_folder_dir = '/home/ben/Dataset/conf_presentation_data/testing/velodyne_reduced';
     % for training data %
     label_folder_dir = '/home/ben/Dataset/KITTI/data_object_image_2/training/label_2';
-    point_cloud_folder_dir = '/home/ben/Dataset/KITTI/data_object_image_2/training/velodyne';
+    point_cloud_folder_dir = '/home/ben/Dataset/KITTI/velody_without_objects';
     
     assert(exist(label_folder_dir) == 7, 'check the label directory');
     assert(exist(point_cloud_folder_dir) == 7, 'check the point cloud directory');
@@ -45,12 +45,10 @@ function [ ]=main()
     % 5316 == 5952
     %106test_dir
     test_dir = './rr/'
-    for index = 1:num_data
+    for index = 9:num_data
         label_name = all_label(index).name ; 
         clearvars label_data
         label_data = reading_label_data(label_folder_dir, label_name);
-
-        if  strcmp(label_data{1,1}, 'Car')
             % plotting point cloud
             point_cloud_name = strrep(label_name, '.txt', '.bin');
             point_cloud = prepare_point_cloud_data(point_cloud_folder_dir ,point_cloud_name);
@@ -69,12 +67,15 @@ function [ ]=main()
             delete(h1);
             h1 = figure(1);
             pcshow(point_cloud(:,1:3));
-
-            colormap summer
+        
+            %colormap summer
+            colormap autumn%winter(10)
+            set(gcf,'color','black');
             hold on;
-            num_label = size( label_data{1,1} ,1) ;
             point = zeros(8,3);
-            for ii = 1:num_label
+            num_label = size(label_data{1,1},1)
+           for ii = 1:num_label
+            if  strcmp(label_data{1,1}(ii), 'Car')
 %                 len  = label_data{1,2}(ii);
 %                 hei = label_data{1, 4}(ii);
 %                 wid  = label_data{1, 3}(ii);
@@ -117,7 +118,7 @@ function [ ]=main()
                 Y_3D =  [ point(1,z_index);  point(2,z_index);  point(3,z_index); point(4,z_index);  point(1,z_index); point(5,z_index);  point(6,z_index);  point(7,z_index);  point(8,z_index);  point(5,z_index);  point(6,z_index);  point(2,z_index);  point(3,z_index);  point(7,z_index);  point(8,z_index);  point(4,z_index)] ;
                 z_index = 3;
                 Z_3D =  [ point(1,z_index);  point(2,z_index);  point(3,z_index); point(4,z_index);  point(1,z_index); point(5,z_index);  point(6,z_index);  point(7,z_index);  point(8,z_index);  point(5,z_index);  point(6,z_index);  point(2,z_index);  point(3,z_index);  point(7,z_index);  point(8,z_index);  point(4,z_index)] ;
-                plot3(X_3D, Y_3D, Z_3D,'color','red');
+                plot3(X_3D, Y_3D, Z_3D,'color','blue','LineWidth',2);
  
                 hold on;
             end
@@ -132,7 +133,7 @@ function [ ]=main()
          axis off
          zoom(3)
          view(250, 20)
-         set(gcf,'PaperUnits','inches','PaperPosition',[0 0 8 6],'color',[0.8, 0.8, 0.8])
+         %set(gcf,'PaperUnits','inches','PaperPosition',[0 0 8 6],'color',[0.8, 0.8, 0.8])
          colormap Parula  
      name = [test_dir, strrep(label_name,'.txt','.jpg')]
      %saveas(gcf,name) 

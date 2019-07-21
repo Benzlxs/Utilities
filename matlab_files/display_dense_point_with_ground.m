@@ -13,39 +13,50 @@ disp('======= KITTI DevKit Demo =======');
 % sequence base directory
 if nargin<1
   dense_base_dir = '/home/ben/Dataset/KITTI/dense_point_cloud';
-  dense_base_dir= '/home/ben/Dataset/KITTI/bad_dense_point_cloud';
-  ground_plane_dir= '/home/ben/Dataset/KITTI/ground_plane/ground_plane_with_postprocess';
+  dense_base_dir= '/home/ben/Dataset/KITTI/dense_point_cloud';
+  ground_plane_dir= '/home/ben/Dataset/KITTI/ground_plane/ground_plane_80_70_with_post_para';
+  %ground_plane_dir= '/home/ben/Dataset/KITTI/ground_plane/ground_plane_80_70_without_post_para';
   
 end
-idx = 61;
+idx = 1242;%1242;% 1090; %
 
-W = [-30, 30]; % [-40, 40] 
-H = [0, 50];  % [0, 50]
-w_sub = 3;
-h_sub = 2.5;
+W = [-40, 40]; % [-30, 30] 
+H = [0, 70];  % [0, 50]
+w_sub = 4;   % 3
+h_sub = 3.5;  % 2.5
 
 
 figure(1), hold on
 dense_point_cloud = read_point_cloud_2(dense_base_dir, idx) ;
-pcshow(dense_point_cloud(:,1:3));
+rand_no = 80000;
+sample = randi( size(dense_point_cloud,1) , 1 , rand_no);
+in_pc = dense_point_cloud(sample,1:3);   % obtaining the coordinates of samples in point cloud
+pcshow(in_pc(:,1:3));
 view([270 90]); % Azimuth and Elevation angle
 colormap colorcube
 
+grid on
+set(gca,'Xtick',0:3.5:70);
+set(gca,'Ytick',-40:4:40);
+set(gca,'GridAlpha',0.8);
+set(gca,'LineWidth',1, 'GridLineStyle','-');
+set(gcf, 'Position',  [50, 50, 2000, 1800]);
 
 %ground_plane = read_ground_plane(ground_plane_dir, idx);
 ground_plane = read_ground_plane_array(ground_plane_dir, idx);
 w_size = ((W(2) - W(1))/w_sub);
 h_size = (H(2) - H(1))/h_sub;
-ground_plane = reshape(ground_plane, [w_size, h_size])
+ground_plane = reshape(ground_plane, [h_size, w_size]);
+ground_plane = ground_plane';
 % plot the groud plane
 num_plane =  size(ground_plane, 1);
-for h_i = h_size:-1:1
-    for w_j = w_size:-1:1
+for h_i = 1:h_size
+    for w_j = 1:w_size
         z_z = ground_plane(h_i, w_j);
         if z_z < 9.5
-            x_1 = H(1) + h_sub*h_i;
+            x_1 = H(1) + h_sub*(h_i-1);
             x_2 = x_1 + h_sub;
-            y_1 = W(1) +  w_sub*w_j;
+            y_1 = W(1) +  w_sub*(w_j-1);
             y_2 = y_1 + w_sub;
             X = [x_1, x_2, x_2, x_1];
             Y = [y_1, y_1, y_2, y_2];
@@ -56,6 +67,31 @@ for h_i = h_size:-1:1
         end
     end
 end
+
+close all
+offset = 1.0;
+% removing the ground point
+figure(2), hold on
+for h_i = 1:h_size
+    for w_j = 1:w_size
+        z_z = ground_plane(h_i, w_j);
+        if z_z < 9.5
+            x_1 = H(1) + h_sub*(h_i-1);
+            x_2 = x_1 + h_sub;
+            y_1 = W(1) +  w_sub*(w_j-1);
+            y_2 = y_1 + w_sub;
+            index = (in_pc(:,1) < x_2)&(in_pc(:,1)>x_1)&(in_pc(:,2)<y_2)&(in_pc(:,2)>y_1)&(in_pc(:,3)>(z_z+offset));
+            tt_pc = in_pc(index,:);
+            pcshow(tt_pc(:,1:3));
+            hold on
+        end
+    end
+end
+colormap colorcube
+
+
+
+
 
 
 X = [10 20 20 10];

@@ -15,3 +15,4 @@
 
 ## Iusse
 1. Neus [covention](https://github.com/Totoro97/NeuS/issues/19)
+2. Neus [other](https://github.com/Totoro97/NeuS/issues/8)

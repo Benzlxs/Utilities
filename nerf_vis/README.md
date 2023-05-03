@@ -11,3 +11,7 @@
 -   `[right, down, forwards]`: OpenCV, COLMAP, most computer vision code.
 2. Plot cameras and point cloud of one DTU samples,
 3. Figure out the projection relationship.
+
+
+## Iusse
+1. Neus [covention](https://github.com/Totoro97/NeuS/issues/19)

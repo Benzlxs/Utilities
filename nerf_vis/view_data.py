@@ -297,12 +297,12 @@ def main():
     if not path.isdir(pose_dir):
         pose_dir, pose_gt_dir = pose_gt_dir, None
     images_dir = look_for_dir(["images", "image", "rgb", "color", "rgbs"])
-    intrin_path = path.join(args.data_dir, "intrinsics.txt")
+    # intrin_path = path.join(args.data_dir, "intrinsics.txt")
     point_cloud_path = path.join(args.data_dir, "sparse/0/points3D.bin")
 
     print("POSE_DIR", pose_dir)
     print("IMAGES_PATH", images_dir)
-    print("INTRIN_PATH", intrin_path)
+    # print("INTRIN_PATH", intrin_path)
     print("POINT_CLOUD_PATH", point_cloud_path)
     # pose_files = sorted([x for x in os.listdir(pose_dir) if x.lower().endswith('.txt')], key=sort_key)
     image_files = sorted([x for x in os.listdir(images_dir) if x.lower().endswith('.png') or x.lower().endswith('.jpg')], key=sort_key)
@@ -385,12 +385,13 @@ def main():
     R = all_poses[:, :3, :3]
     t = all_poses[:, :3, 3] * scale
 
-    intrins = np.loadtxt(intrin_path)
+    # intrins = np.loadtxt(intrin_path)
+    intrins = intrinsics_all[0]
     focal = (intrins[0, 0] + intrins[1, 1]) * 0.5
     image_wh = get_image_size(path.join(images_dir, image_files[0]))
 
     scene = Scene("colmap dataset: " + dataset_name)
-
+    scene.set_opencv()
 
     # Try to pick a good frustum size
     avg_dist : float = np.mean(np.linalg.norm(t[1:] - t[:-1], axis=-1))
@@ -422,6 +423,22 @@ def main():
                              connect=args.seg,
                              color=[1.0, 0.0, 0.0])
 
+
+    from PIL import Image
+    all_images = [ Image.open(images_dir + "/" + i) for i in image_files]
+    all_images  = np.stack(all_images)
+
+    for i_img in range(n_images):
+        scene.add_image(
+                    f"images/{i_img}",
+                    # images_dir+ "/" + image_files[i_img],
+                    all_images[i_img],
+                    r=R[i_img,:3,:3],
+                    t=t[i_img,:3,None],
+                    focal_length=focal,
+                    z=0.1,
+                    image_size=128,
+        )
     if pose_gt_dir is not None:
         print('Loading GT')
         pose_gt_files = sorted([x for x in os.listdir(pose_gt_dir) if x.endswith('.txt')], key=sort_key)

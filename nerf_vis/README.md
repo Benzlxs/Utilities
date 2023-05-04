@@ -16,4 +16,4 @@
 ## Iusse
 1. Neus [covention](https://github.com/Totoro97/NeuS/issues/19)
 2. Neus [other](https://github.com/Totoro97/NeuS/issues/8)
-2 World_mat and scale [explaination](https://github.com/lioryariv/idr/blob/main/DATA_CONVENTION.md)
+3. World_mat and scale [explaination](https://github.com/lioryariv/idr/blob/main/DATA_CONVENTION.md)

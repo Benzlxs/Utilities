@@ -8,6 +8,7 @@ import sys
 import os
 import struct
 import collections
+import glob
 from os import path
 import cv2 as cv
 DIR_PATH = path.dirname(os.path.realpath(__file__))
@@ -284,7 +285,7 @@ def main():
 
     dataset_name = path.basename(path.abspath(args.data_dir))
 
-    def look_for_dir(cands, required=True):
+    def look_for_dir(cands, required=False):
         for cand in cands:
             if path.isdir(path.join(args.data_dir, cand)):
                 return path.join(args.data_dir, cand)
@@ -298,7 +299,9 @@ def main():
         pose_dir, pose_gt_dir = pose_gt_dir, None
     images_dir = look_for_dir(["images", "image", "rgb", "color", "rgbs"])
     # intrin_path = path.join(args.data_dir, "intrinsics.txt")
-    point_cloud_path = path.join(args.data_dir, "sparse/0/points3D.bin")
+
+    #point_cloud_path = path.join(args.data_dir, "sparse/0/points3D.bin")
+    point_cloud_path = glob.glob(args.data_dir + "/*total.ply")[0]
 
     print("POSE_DIR", pose_dir)
     print("IMAGES_PATH", images_dir)
@@ -316,7 +319,7 @@ def main():
     #     all_poses.append(pose)
     # all_poses = np.stack(all_poses)
     n_images = len(image_files)
-    camera_dict = np.load(os.path.join(args.data_dir, "preprocessed/cameras_sphere.npz"))
+    camera_dict = np.load(os.path.join(args.data_dir, "cameras_sphere.npz"))
     world_mats_np = [camera_dict['world_mat_%d' % idx].astype(np.float32) for idx in range(n_images)]
     scale_mats_np = []
     scale_mats_np = [camera_dict['scale_mat_%d' % idx].astype(np.float32) for idx in range(n_images)]
@@ -380,7 +383,7 @@ def main():
         return transform, scale
 
     T, scale = get_transform(all_poses)
-    all_poses = T @ all_poses
+    all_poses = T @ all_poses # @ np.diag([1, -1, -1, 1])
 
     R = all_poses[:, :3, :3]
     t = all_poses[:, :3, 3] * scale
@@ -388,6 +391,7 @@ def main():
     # intrins = np.loadtxt(intrin_path)
     intrins = intrinsics_all[0]
     focal = (intrins[0, 0] + intrins[1, 1]) * 0.5
+
     image_wh = get_image_size(path.join(images_dir, image_files[0]))
 
     scene = Scene("colmap dataset: " + dataset_name)
@@ -399,6 +403,7 @@ def main():
 
     # Infer world up direction from GT cams
     ups = np.sum(R * np.array([0, -1.0, 0]), axis=-1)
+    # ups = np.sum(R * np.array([0, 1.0, 0]), axis=-1)
     world_up = np.mean(ups, axis=0)
     world_up /= np.linalg.norm(world_up)
 
@@ -414,10 +419,14 @@ def main():
     center = origin - vforward * np.linalg.norm(t - origin, axis=-1).mean() * 0.7 * 3
     print('  camera center', center, 'vforward', vforward, 'world_up', world_up)
 
+    R = R #  @ np.diag([1,-1,-1])
+
     scene.add_camera_frustum(name=f"traj_{n_images:04d}", focal_length=focal,
                              image_width=image_wh[0],
                              image_height=image_wh[1],
                              z=0.1,
+                             # z=-1,
+                             # opengl=True,
                              r=R,
                              t=t,
                              connect=args.seg,
@@ -425,18 +434,23 @@ def main():
 
 
     from PIL import Image
+    from scipy.spatial.transform import Rotation
     all_images = [ Image.open(images_dir + "/" + i) for i in image_files]
     all_images  = np.stack(all_images)
 
     for i_img in range(n_images):
+        r = Rotation.from_matrix(np.asmatrix(R[i_img,...]))
         scene.add_image(
                     f"images/{i_img}",
                     # images_dir+ "/" + image_files[i_img],
                     all_images[i_img],
-                    r=R[i_img,:3,:3],
-                    t=t[i_img,:3,None],
+                    # r=R[[i_img],:3,:3],
+                    r=r.as_rotvec(),
+                    t=t[[i_img],:3],
                     focal_length=focal,
                     z=0.1,
+                    #  z=-1,
+                    # opengl=True,
                     image_size=128,
         )
     if pose_gt_dir is not None:
@@ -479,8 +493,12 @@ def main():
     if path.isfile(point_cloud_path):
         #TODO recale the point clouds
         # point_cloud = np.load(point_cloud_path)
-        point3d = read_colmap_sparse(point_cloud_path)
-        point_cloud = np.stack([p.xyz for p in point3d])
+        # point3d = read_colmap_sparse(point_cloud_path)
+        # point_cloud = np.stack([p.xyz for p in point3d])
+        import open3d as o3d
+        pcd = o3d.io.read_point_cloud(point_cloud_path)
+        point_cloud = np.asarray(pcd.points)
+        colors = np.asarray(pcd.colors)
         pc_scale_mat = scale_mats_np[0]
         radius = pc_scale_mat[0,0]
         pc_translation = pc_scale_mat[:3,3]
@@ -488,7 +506,7 @@ def main():
         point_cloud /= radius
         point_cloud = (T[:3, :3] @ point_cloud[:, :, None])[:, :, 0] + T[:3, 3]
         point_cloud *= scale
-        scene.add_points("point_cloud", point_cloud, color=[0.0, 0.0, 0.0], unlit=True)
+        scene.add_points("point_cloud", point_cloud, vert_color=colors, unlit=True)
 
 
     out_dir = path.join(args.data_dir, "visual")

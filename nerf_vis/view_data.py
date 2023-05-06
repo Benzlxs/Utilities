@@ -325,16 +325,21 @@ def main():
     scale_mats_np = [camera_dict['scale_mat_%d' % idx].astype(np.float32) for idx in range(n_images)]
     intrinsics_all = []
     pose_all = []
+    P_w2img  = []
 
     for scale_mat, world_mat in zip(scale_mats_np, world_mats_np):
         P = world_mat @ scale_mat
         P = P[:3, :4]
+        P_w2img.append(P)
         intrinsics, pose = load_K_Rt_from_P(None, P)
         intrinsics_all.append(intrinsics)
         pose_all.append(pose)
+    P_w2img = np.stack(P_w2img)
     all_poses = np.stack(pose_all)
     intrinsics_all = np.stack(intrinsics_all)
     intrinsics_all_inv = np.linalg.inv(intrinsics_all)
+
+    is_transform = False
 
     def get_transform(c2w):
         t = c2w[:, :3, 3]
@@ -382,11 +387,14 @@ def main():
         scale *= 0.95
         return transform, scale
 
-    T, scale = get_transform(all_poses)
-    all_poses = T @ all_poses # @ np.diag([1, -1, -1, 1])
-
-    R = all_poses[:, :3, :3]
-    t = all_poses[:, :3, 3] * scale
+    if is_transform:
+        T, scale = get_transform(all_poses)
+        all_poses = T @ all_poses # @ np.diag([1, -1, -1, 1])
+        R = all_poses[:, :3, :3]
+        t = all_poses[:, :3, 3] * scale
+    else:
+        R = all_poses[:, :3, :3]
+        t = all_poses[:, :3, 3]
 
     # intrins = np.loadtxt(intrin_path)
     intrins = intrinsics_all[0]
@@ -424,7 +432,7 @@ def main():
     scene.add_camera_frustum(name=f"traj_{n_images:04d}", focal_length=focal,
                              image_width=image_wh[0],
                              image_height=image_wh[1],
-                             z=0.1,
+                             z=0.2,
                              # z=-1,
                              # opengl=True,
                              r=R,
@@ -438,6 +446,70 @@ def main():
     all_images = [ Image.open(images_dir + "/" + i) for i in image_files]
     all_images  = np.stack(all_images)
 
+    ## generate rays
+    n_imgs, H_img, W_img, _ = all_images.shape
+    batch_size = 1
+    n_samples = 3
+    img_idx = np.random.randint(n_imgs)
+    pixels_x = np.random.randint(low=0, high=W_img, size=[batch_size])
+    pixels_y = np.random.randint(low=0, high=H_img, size=[batch_size])
+
+    p = np.stack([pixels_x, pixels_y, np.ones_like(pixels_y)], axis=-1)  # batch_size, 3
+    p = np.matmul(intrinsics_all_inv[img_idx, None, :3, :3], p[:, :, None]).squeeze() # batch_size, 3
+    if batch_size == 1:
+        p = p[None,:]
+    rays_v = p / np.linalg.norm(p, ord=2, axis=-1, keepdims=True)    # batch_size, 3
+    rays_v = np.matmul(all_poses[img_idx, None, :3, :3], rays_v[:, :, None]).squeeze()  # batch_size, 3
+    if batch_size == 1:
+        rays_v = rays_v[None,:]
+    # rays_o = all_poses[img_idx, None, :3, 3].expand(rays_v.shape) # batch_size, 3
+    rays_o = np.repeat(all_poses[img_idx,None,:3,3], rays_v.shape[0], axis=0)
+    a = np.sum(rays_v**2, axis=-1, keepdims=True)
+    b = 2.0 * np.sum(rays_o * rays_v, axis=-1, keepdims=True)
+    mid = 0.5 * (-b) / a
+    near = mid - 1.0
+    far = mid + 1.0
+    z_vals = np.linspace(0.0, 1.0, n_samples)
+    z_vals = near + (far - near) * z_vals[None, :]
+    pts = rays_o[:, None, :] + rays_v[:, None, :] * z_vals[..., :, None]
+
+    one_mat = np.ones_like(pts[...,0])
+
+    pts_ad = np.concatenate([pts, one_mat[:,:,None]], axis=-1)
+
+    scene.add_line("lines_pose/1",
+                   all_poses[img_idx,:3,3],
+                   all_poses[img_idx+1,:3,3],
+                   color=[0., 1., 0.])
+
+    #TODO plot the pts
+    pts_plot = pts.reshape(-1,3)
+    neighor_t = all_poses[[img_idx+1],:3,3] # t[[img_idx+1], :3]
+    neighor_t = np.repeat(neighor_t, batch_size*n_samples, axis=0)
+    # for k in range(batch_size*n_samples):
+    #     scene.add_line("line_pose/0{}".format(k),
+    #                    pts_plot[k],
+    #                    neighor_t[k],
+    #                    color=np.random.random(3))
+
+    all_line_pts = np.concatenate([pts_plot, neighor_t], axis=0)
+    start_indice = np.arange(batch_size*n_samples)
+    end_indice = np.arange(batch_size*n_samples) + batch_size*n_samples
+    segs = np.stack([start_indice, end_indice],axis=1)
+    scene.add_lines("lines/1",
+                    all_line_pts,
+                    segs = segs,
+                    # r=R,
+                    # t=t,
+                    vert_color=np.random.random([batch_size*n_samples, 3])
+                    )
+
+    ## tranform from world coordinate to image planes
+    pts_flat = pts_ad.reshape(-1,4)
+    # pts_img = np.matmul(P_w2img[[img_idx],:,:, pts_flat[:,:, None]])
+    # pts_img = pts_img.reshape(batch_size, n_samples, 3)
+
+
     for i_img in range(n_images):
         r = Rotation.from_matrix(np.asmatrix(R[i_img,...]))
         scene.add_image(
@@ -448,10 +520,10 @@ def main():
                     r=r.as_rotvec(),
                     t=t[[i_img],:3],
                     focal_length=focal,
-                    z=0.1,
+                    z=0.2,
                     #  z=-1,
                     # opengl=True,
-                    image_size=128,
+                    image_size=256,
         )
     if pose_gt_dir is not None:
         print('Loading GT')
@@ -504,8 +576,9 @@ def main():
         pc_translation = pc_scale_mat[:3,3]
         point_cloud -= pc_translation
         point_cloud /= radius
-        point_cloud = (T[:3, :3] @ point_cloud[:, :, None])[:, :, 0] + T[:3, 3]
-        point_cloud *= scale
+        if is_transform:
+            point_cloud = (T[:3, :3] @ point_cloud[:, :, None])[:, :, 0] + T[:3, 3]
+            point_cloud *= scale
         scene.add_points("point_cloud", point_cloud, vert_color=colors, unlit=True)
 
 

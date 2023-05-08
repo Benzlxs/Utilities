@@ -449,10 +449,21 @@ def main():
     ## generate rays
     n_imgs, H_img, W_img, _ = all_images.shape
     batch_size = 1
-    n_samples = 3
+    n_samples = 10
     img_idx = np.random.randint(n_imgs)
+    # img_idx = 13
+    # img_idx_neighbor = img_idx + 26
+
+    #TODO find the neareast camera
+    cur_loc = all_poses[[img_idx], :3, 3]
+    distance = ((t - cur_loc)**2).sum(axis=-1)
+    near_idx = distance.argsort()[1]  # top 2
+    img_idx_neighbor = near_idx
+
     pixels_x = np.random.randint(low=0, high=W_img, size=[batch_size])
     pixels_y = np.random.randint(low=0, high=H_img, size=[batch_size])
+
+    print("Process image: {}".format(img_idx))
 
     p = np.stack([pixels_x, pixels_y, np.ones_like(pixels_y)], axis=-1)  # batch_size, 3
     p = np.matmul(intrinsics_all_inv[img_idx, None, :3, :3], p[:, :, None]).squeeze() # batch_size, 3
@@ -479,18 +490,23 @@ def main():
 
     scene.add_line("lines_pose/1",
                    all_poses[img_idx,:3,3],
-                   all_poses[img_idx+1,:3,3],
+                   all_poses[img_idx_neighbor,:3,3],
                    color=[0., 1., 0.])
 
     #TODO plot the pts
     pts_plot = pts.reshape(-1,3)
-    neighor_t = all_poses[[img_idx+1],:3,3] # t[[img_idx+1], :3]
+    neighor_t = all_poses[[img_idx_neighbor],:3,3] # t[[img_idx+1], :3]
     neighor_t = np.repeat(neighor_t, batch_size*n_samples, axis=0)
     # for k in range(batch_size*n_samples):
     #     scene.add_line("line_pose/0{}".format(k),
     #                    pts_plot[k],
     #                    neighor_t[k],
     #                    color=np.random.random(3))
+    scene.add_line("lines_pose",
+                   all_poses[img_idx,:3,3],
+                   pts_plot[-1],
+                   color=[1.,0.,0.],
+                   )
 
     all_line_pts = np.concatenate([pts_plot, neighor_t], axis=0)
     start_indice = np.arange(batch_size*n_samples)
@@ -501,14 +517,18 @@ def main():
                     segs = segs,
                     # r=R,
                     # t=t,
-                    vert_color=np.random.random([batch_size*n_samples, 3])
+                    # vert_color=np.random.random([batch_size*n_samples, 3])
                     )
 
     ## tranform from world coordinate to image planes
     pts_flat = pts_ad.reshape(-1,4)
-    # pts_img = np.matmul(P_w2img[[img_idx],:,:, pts_flat[:,:, None]])
-    # pts_img = pts_img.reshape(batch_size, n_samples, 3)
+    pts_img = np.matmul(P_w2img[[img_idx_neighbor],:,:], pts_flat[:,:, None])
+    pts_img = pts_img.reshape(batch_size, n_samples, 3).squeeze()
+    u_img = np.rint((pts_img[:,0]/pts_img[:,2])).astype(int)
+    v_img = np.rint((pts_img[:,1]/pts_img[:,2])).astype(int)
 
+    for u, v in zip(u_img.tolist(), v_img.tolist()):
+        cv.circle(all_images[img_idx_neighbor], (u, v), radius=8, color=np.random.random(3)*255, thickness=-1)
 
     for i_img in range(n_images):
         r = Rotation.from_matrix(np.asmatrix(R[i_img,...]))
@@ -523,7 +543,7 @@ def main():
                     z=0.2,
                     #  z=-1,
                     # opengl=True,
-                    image_size=256,
+                    image_size=512,
         )
     if pose_gt_dir is not None:
         print('Loading GT')

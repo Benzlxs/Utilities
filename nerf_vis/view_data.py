@@ -179,7 +179,6 @@ def align_procrustes_rt(t_a : np.ndarray, q_a : np.ndarray,
     return transform if want_transform else transform(t_a, q_a)
 
 # END BORROWED CODE
-
 def get_image_size(path : str):
     """
     Get image size without loading it
@@ -204,7 +203,6 @@ def read_next_bytes(fid, num_bytes, format_char_sequence, endian_character="<"):
     """
     data = fid.read(num_bytes)
     return struct.unpack(endian_character + format_char_sequence, data)
-
 
 def read_colmap_sparse(sparse_path):
     points3D_idmap = {}
@@ -266,24 +264,12 @@ def load_K_Rt_from_P(filename, P=None):
 
     return intrinsics, pose
 
-def main():
-    parser = ArgumentParser()
-    parser.add_argument("data_dir", type=str, help="dataset root")
-    parser.add_argument(
-        "--seg",
-        action="store_true",
-        default=False,
-        help="connect camera trajectories with lines, should be used e.g. in NeRF synthetic",
-    )
-    parser.add_argument(
-        "--n_cameras_for_procrustes", '-P',
-        type=int,
-        default=100000,
-        help="use at most first x cameras for procrustes. Useful if trajectory starts to diverge",
-    )
-    args = parser.parse_args()
-
+def main(args):
+    batch_size = args.batch_size
+    n_samples  = args.n_samples
+    is_transform = args.is_transform
     dataset_name = path.basename(path.abspath(args.data_dir))
+    near_n_cameras = args.near_n_cameras
 
     def look_for_dir(cands, required=False):
         for cand in cands:
@@ -448,22 +434,25 @@ def main():
 
     ## generate rays
     n_imgs, H_img, W_img, _ = all_images.shape
-    batch_size = 1
-    n_samples = 10
-    img_idx = np.random.randint(n_imgs)
-    # img_idx = 13
+
+    if args.img_idx == -1:
+        img_idx = np.random.randint(n_imgs)
+    else:
+        img_idx = args.img_idx
+
     # img_idx_neighbor = img_idx + 26
 
     #TODO find the neareast camera
     cur_loc = all_poses[[img_idx], :3, 3]
     distance = ((t - cur_loc)**2).sum(axis=-1)
-    near_idx = distance.argsort()[1]  # top 2
+
+    near_idx = distance.argsort()[1:(near_n_cameras + 1)]  # top 2
     img_idx_neighbor = near_idx
 
     pixels_x = np.random.randint(low=0, high=W_img, size=[batch_size])
     pixels_y = np.random.randint(low=0, high=H_img, size=[batch_size])
 
-    print("Process image: {}".format(img_idx))
+    print("Process image: {}; the nearest image is {}".format(img_idx, img_idx_neighbor))
 
     p = np.stack([pixels_x, pixels_y, np.ones_like(pixels_y)], axis=-1)  # batch_size, 3
     p = np.matmul(intrinsics_all_inv[img_idx, None, :3, :3], p[:, :, None]).squeeze() # batch_size, 3
@@ -488,47 +477,50 @@ def main():
 
     pts_ad = np.concatenate([pts, one_mat[:,:,None]], axis=-1)
 
-    scene.add_line("lines_pose/1",
-                   all_poses[img_idx,:3,3],
-                   all_poses[img_idx_neighbor,:3,3],
-                   color=[0., 1., 0.])
-
-    #TODO plot the pts
+    # plot the camera ray
     pts_plot = pts.reshape(-1,3)
-    neighor_t = all_poses[[img_idx_neighbor],:3,3] # t[[img_idx+1], :3]
-    neighor_t = np.repeat(neighor_t, batch_size*n_samples, axis=0)
-    # for k in range(batch_size*n_samples):
-    #     scene.add_line("line_pose/0{}".format(k),
-    #                    pts_plot[k],
-    #                    neighor_t[k],
-    #                    color=np.random.random(3))
     scene.add_line("lines_pose",
                    all_poses[img_idx,:3,3],
                    pts_plot[-1],
-                   color=[1.,0.,0.],
+                   color=[1.,0.,1.],
                    )
-
-    all_line_pts = np.concatenate([pts_plot, neighor_t], axis=0)
-    start_indice = np.arange(batch_size*n_samples)
-    end_indice = np.arange(batch_size*n_samples) + batch_size*n_samples
-    segs = np.stack([start_indice, end_indice],axis=1)
-    scene.add_lines("lines/1",
-                    all_line_pts,
-                    segs = segs,
-                    # r=R,
-                    # t=t,
-                    # vert_color=np.random.random([batch_size*n_samples, 3])
-                    )
-
-    ## tranform from world coordinate to image planes
     pts_flat = pts_ad.reshape(-1,4)
-    pts_img = np.matmul(P_w2img[[img_idx_neighbor],:,:], pts_flat[:,:, None])
-    pts_img = pts_img.reshape(batch_size, n_samples, 3).squeeze()
-    u_img = np.rint((pts_img[:,0]/pts_img[:,2])).astype(int)
-    v_img = np.rint((pts_img[:,1]/pts_img[:,2])).astype(int)
+    # plot the sampled pts to neighoring cameras
+    for _idx_neigh in img_idx_neighbor:
+        scene.add_line("lines_pose/1",
+                       all_poses[img_idx,:3,3],
+                       all_poses[_idx_neigh,:3,3],
+                       color=[0., 1., 0.])
 
-    for u, v in zip(u_img.tolist(), v_img.tolist()):
-        cv.circle(all_images[img_idx_neighbor], (u, v), radius=8, color=np.random.random(3)*255, thickness=-1)
+        neighor_t = all_poses[[_idx_neigh],:3,3] # t[[img_idx+1], :3]
+        neighor_t = np.repeat(neighor_t, batch_size*n_samples, axis=0)
+        #                    pts_plot[k],
+        #                    neighor_t[k],
+        #                    color=np.random.random(3))
+        all_line_pts = np.concatenate([pts_plot, neighor_t], axis=0)
+        start_indice = np.arange(batch_size*n_samples)
+        end_indice = np.arange(batch_size*n_samples) + batch_size*n_samples
+        segs = np.stack([start_indice, end_indice],axis=1)
+        scene.add_lines("lines/{}".format(_idx_neigh),
+                        all_line_pts,
+                        segs = segs,
+                        # r=R,
+                        # t=t,
+                        color=np.random.random(3),
+                        # vert_color=np.random.random([batch_size*n_samples, 3])
+                        )
+        ## tranform from world coordinate to image planes
+        pts_img = np.matmul(P_w2img[[_idx_neigh],:,:], pts_flat[:,:, None])
+        pts_img = pts_img.reshape(batch_size, n_samples, 3).squeeze()
+        u_img = np.rint((pts_img[:,0]/pts_img[:,2])).astype(int)
+        v_img = np.rint((pts_img[:,1]/pts_img[:,2])).astype(int)
+
+        for u, v in zip(u_img.tolist(), v_img.tolist()):
+            cv.circle(all_images[_idx_neigh], (u, v), radius=8, color=np.random.random(3)*255, thickness=-1)
+
+
+
+
 
     for i_img in range(n_images):
         r = Rotation.from_matrix(np.asmatrix(R[i_img,...]))
@@ -612,4 +604,35 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = ArgumentParser()
+    parser.add_argument("data_dir", type=str, help="dataset root")
+    parser.add_argument(
+        "--seg",
+        action="store_true",
+        default=False,
+        help="connect camera trajectories with lines, should be used e.g. in NeRF synthetic",
+    )
+    parser.add_argument(
+        "--n_cameras_for_procrustes", '-P',
+        type=int,
+        default=100000,
+        help="use at most first x cameras for procrustes. Useful if trajectory starts to diverge",
+    )
+    parser.add_argument(
+        "--batch_size", type=int, default=1, help="type in the batchsize for processing the point rays"
+    )
+    parser.add_argument(
+        "--n_samples", type=int, default=10, help="the number of smaple for each light ray"
+    )
+    parser.add_argument(
+        "--is_transform", action="store_true", default=False, help= "Doing transformation on point cloud and camera poses"
+    )
+    parser.add_argument(
+        "--img_idx", type=int, default=-1, help= "the image index"
+    )
+    parser.add_argument(
+        "--near_n_cameras", type=int, default=1, help= "the number of chosed camera poses"
+    )
+    args = parser.parse_args()
+
+    main(args)

@@ -478,16 +478,17 @@ def main(args):
     pts_ad = np.concatenate([pts, one_mat[:,:,None]], axis=-1)
 
     # plot the camera ray
+    for bs in range(batch_size):
+        scene.add_line("rays/{}".format(bs),
+                       all_poses[img_idx,:3,3],
+                       pts[bs,-1,:],
+                       color=np.random.random(3),
+                       )
     pts_plot = pts.reshape(-1,3)
-    scene.add_line("lines_pose",
-                   all_poses[img_idx,:3,3],
-                   pts_plot[-1],
-                   color=[1.,0.,1.],
-                   )
     pts_flat = pts_ad.reshape(-1,4)
     # plot the sampled pts to neighoring cameras
     for _idx_neigh in img_idx_neighbor:
-        scene.add_line("lines_pose/1",
+        scene.add_line("near_camera/{}".format(_idx_neigh),
                        all_poses[img_idx,:3,3],
                        all_poses[_idx_neigh,:3,3],
                        color=[0., 1., 0.])
@@ -511,15 +512,12 @@ def main(args):
                         )
         ## tranform from world coordinate to image planes
         pts_img = np.matmul(P_w2img[[_idx_neigh],:,:], pts_flat[:,:, None])
-        pts_img = pts_img.reshape(batch_size, n_samples, 3).squeeze()
+        pts_img = pts_img.reshape(batch_size*n_samples, 3).squeeze()
         u_img = np.rint((pts_img[:,0]/pts_img[:,2])).astype(int)
         v_img = np.rint((pts_img[:,1]/pts_img[:,2])).astype(int)
 
         for u, v in zip(u_img.tolist(), v_img.tolist()):
             cv.circle(all_images[_idx_neigh], (u, v), radius=8, color=np.random.random(3)*255, thickness=-1)
-
-
-
 
 
     for i_img in range(n_images):

@@ -4,6 +4,8 @@ import copy
 import argparse
 import os
 import numpy as np
+from spatialmath import SE3, SO3
+
 
 try:
     import open3d as o3d
@@ -22,21 +24,26 @@ if __name__ == "__main__":
     parser.add_argument(
         "--points_size", default=1, help="point size"
     )#lidarxyzintensityright000150.bin
+    parser.add_argument("--rx", type=int, default=0, help='',)
+    parser.add_argument("--ry", type=int, default=0, help='',)
+    parser.add_argument("--rz", type=int, default=0, help='', )#lidarxyzintensityright000150.bin
+    parser.add_argument("--scale", type=float, default=1., help="")
+
 
     flags = parser.parse_args()
     points_size = flags.points_size
     pcd = o3d.io.read_point_cloud(flags.lidarfile)
 
     """Load and parse a velodyne binary file."""
-    # points = np.fromfile(lidarfile, dtype=np.float32) # vector points
-    # points = np.load(lidarfile) # vector points
     points = np.asarray(pcd.points)
-    z0 = points[:,2].min()
-    z1 = points[:,2].max()
-    x0 = points[:,0].min()
-    x1 = points[:,0].max()
-    y0 = points[:,1].min()
-    y1 = points[:,1].max()
+
+    # cropping
+    #@ z0 = points[:,2].min()
+    #@ z1 = points[:,2].max()
+    #@ x0 = points[:,0].min()
+    #@ x1 = points[:,0].max()
+    #@ y0 = points[:,1].min()
+    #@ y1 = points[:,1].max()
     #@ points = points[points[:,2] > z0 + 1.6, :]
     #@ points = points[points[:,2] < z1 - 6.6, :]
     #@ points = points[points[:,0] > x0 + 10.0, :]
@@ -51,9 +58,18 @@ if __name__ == "__main__":
     # points = points[points[:,2] > -0.9, :]
     # points = points[points[:,2] <  2.6, :]
 
+    ## rotation and scaling
+    m_x = SO3.Ry(flags.ry, 'deg')
+    m_y = SO3.Rx(flags.rx, 'deg')
+    m_z = SO3.Rz(flags.rz, 'deg')
+    points = np.matmul(points, np.asarray(m_x))
+    points = np.matmul(points, np.asarray(m_y))
+    points = np.matmul(points, np.asarray(m_z))
+    points = points * flags.scale
+
     # pcd = geometry.PointCloud()
     # pcd = pcd.voxel_down_sample(voxel_size=0.4)
-    # pcd.points = o3d.utility.Vector3dVector(points[:, :3])
+    pcd.points = o3d.utility.Vector3dVector(points[:, :3])
     vis =  o3d.visualization.Visualizer()
     vis.create_window()
 
@@ -64,5 +80,7 @@ if __name__ == "__main__":
     vis.get_render_option().point_size = points_size  # set points size
     vis.add_geometry(pcd)
     vis.run()
+    vis.capture_screen_image("./")
+    vis.destroy_window()
     # o3d.visualization.draw_geometries([pcd])
 

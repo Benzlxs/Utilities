@@ -51,6 +51,8 @@ if __name__ == "__main__":
         points = np.matmul(points, np.asarray(m_z))
         points = points * flags.scale
 
+        center = points.mean(0)
+
         gt = file_txt_list[idx][0:-1].split(' ')[2]
 
         pcd_2 = geometry.PointCloud()
@@ -59,10 +61,19 @@ if __name__ == "__main__":
 
         vis = o3d.visualization.Visualizer()
         vis.create_window()
+        mesh_frame = geometry.TriangleMesh.create_coordinate_frame(
+        size=20, origin=center.tolist())  # create coordinate frame
+        # vis.add_geometry(mesh_frame)
+
+        box3d = geometry.OrientedBoundingBox(center.tolist(), geometry.get_rotation_matrix_from_xyz(np.zeros(3)) , [45, 45, 45])
+        line_set = geometry.LineSet.create_from_oriented_bounding_box(box3d)
+        line_set.paint_uniform_color([1,1,0])
+        # draw bboxes on visualizer
+        vis.add_geometry(line_set)
 
         vis.add_geometry(pcd_2)
         vis.run()
-        name_img = flags.save_folder + "/" + flags.file_list.split('/')[-1][:-4] + str(gt) + ".png"
+        name_img = flags.save_folder + "/" + flags.file_list.split('/')[-1][:-4] + "_%d_"%(idx) + str(int(float(gt))) + ".png"
         vis.capture_screen_image(name_img)
         vis.destroy_window()
     # """Load and parse a velodyne binary file."""

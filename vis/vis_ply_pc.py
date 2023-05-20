@@ -36,20 +36,34 @@ if __name__ == "__main__":
 
     """Load and parse a velodyne binary file."""
     points = np.asarray(pcd.points)
+    colors = np.asarray(pcd.colors)
+
+    m_z = SO3.Rz(flags.rz, 'deg')
+    points = np.matmul(points, np.asarray(m_z))
+
 
     # cropping
-    #@ z0 = points[:,2].min()
-    #@ z1 = points[:,2].max()
-    #@ x0 = points[:,0].min()
-    #@ x1 = points[:,0].max()
-    #@ y0 = points[:,1].min()
-    #@ y1 = points[:,1].max()
-    #@ points = points[points[:,2] > z0 + 1.6, :]
-    #@ points = points[points[:,2] < z1 - 6.6, :]
-    #@ points = points[points[:,0] > x0 + 10.0, :]
-    #@ points = points[points[:,0] < x1 - 20., :]
-    #@ points = points[points[:,1] > y0 + 45.0, :]
-    #@ points = points[points[:,1] < y1 - 45.0, :]
+    z0 = points[:,2].min()
+    z1 = points[:,2].max()
+    x0 = points[:,0].min()
+    x1 = points[:,0].max()
+    y0 = points[:,1].min()
+    y1 = points[:,1].max()
+    # points = points[points[:,2] > z0 + 1.6, :]
+    # points = points[points[:,2] < z1 - 6.6, :]
+    index = (points[:,0] > x0 + 10.) & (points[:,0] < x1 - 20.) & (points[:, 1] > y0 + 20. ) & (points[:,1] < y1 - 8)
+    # points = points[points[:,0] > x0 + 10.0, :]
+    # points = points[points[:,0] < x1 - 20., :]
+    # points = points[points[:,1] > y0 + 15.0, :]
+    # points = points[points[:,1] < y1 - 15.0, :]
+    points = points[index, :]
+    colors = colors[index, :]
+
+    m_x = SO3.Ry(flags.ry, 'deg')
+    m_y = SO3.Rx(flags.rx, 'deg')
+    points = np.matmul(points, np.asarray(m_x))
+    points = np.matmul(points, np.asarray(m_y))
+    points = points * flags.scale
 
     # points = points[points[:,0] > -15.0, :]  # left``
     # points = points[points[:,0] < 25., :]
@@ -59,28 +73,32 @@ if __name__ == "__main__":
     # points = points[points[:,2] <  2.6, :]
 
     ## rotation and scaling
-    m_x = SO3.Ry(flags.ry, 'deg')
-    m_y = SO3.Rx(flags.rx, 'deg')
-    m_z = SO3.Rz(flags.rz, 'deg')
-    points = np.matmul(points, np.asarray(m_x))
-    points = np.matmul(points, np.asarray(m_y))
-    points = np.matmul(points, np.asarray(m_z))
-    points = points * flags.scale
 
     # pcd = geometry.PointCloud()
     # pcd = pcd.voxel_down_sample(voxel_size=0.4)
     pcd.points = o3d.utility.Vector3dVector(points[:, :3])
+    pcd.colors = o3d.utility.Vector3dVector(colors[:, :3])
     vis =  o3d.visualization.Visualizer()
     vis.create_window()
 
-    mesh_frame = geometry.TriangleMesh.create_coordinate_frame(
-        size=1, origin=[0, 0, 0])  # create coordinate frame
-    vis.add_geometry(mesh_frame)
+    # mesh_frame = geometry.TriangleMesh.create_coordinate_frame(
+    #     size=1, origin=[0, 0, 0])  # create coordinate frame
+    # vis.add_geometry(mesh_frame)
 
     vis.get_render_option().point_size = points_size  # set points size
     vis.add_geometry(pcd)
+    # ctr = vis.get_view_control()
+    # ctr.change_field_of_view(step=00.)
+    # ctr.rotate(10.0, 10.)
+    def rotate_view(vis):
+        ctr = vis.get_view_control()
+        ctr.rotate(10.,0.)
+        return False
+    # o3d.visualization.draw_geometries_with_animation_callback([pcd], rotate_view)
     vis.run()
-    vis.capture_screen_image("./")
+    # vis.register_animation_callback(rotate_view)
+    img_name = 'x_' + str(flags.rx) + '_y_' + str(flags.ry) + '_z_' + str(flags.rz) + '_scale_' + str(flags.scale) + '.png'
+    vis.capture_screen_image(img_name)
     vis.destroy_window()
     # o3d.visualization.draw_geometries([pcd])
 

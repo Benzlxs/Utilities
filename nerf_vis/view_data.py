@@ -9,6 +9,7 @@ import os
 import struct
 import collections
 import glob
+import time
 from os import path
 import cv2 as cv
 DIR_PATH = path.dirname(os.path.realpath(__file__))
@@ -192,6 +193,60 @@ def sort_key(x):
         return x[2:]
     return x
 
+from numba import njit
+@njit
+def efficient_dist_calc(A, B):
+    Dist = A - B
+    Dist = (Dist**2).sum(-1)
+    return Dist
+
+def fps(points, n_samples):
+    """
+    points: [N, 3] array containing the whole point cloud
+    n_samples: samples you want in the sampled point cloud typically << N
+    """
+    points = np.array(points)
+
+    # Represent the points by their indices in points
+    points_left = np.arange(len(points)) # [P]
+
+    # Initialise an array for the sampled indices
+    sample_inds = np.zeros(n_samples, dtype='int') # [S]
+
+    # Initialise distances to inf
+    dists = np.ones_like(points_left) * float('inf') # [P]
+
+    # Select a point from points by its index, save it
+    selected = 0
+    sample_inds[0] = points_left[selected]
+
+    # Delete selected
+    points_left = np.delete(points_left, selected) # [P - 1]
+
+    # Iteratively select points for a maximum of n_samples
+    for i in range(1, n_samples):
+        # Find the distance to the last added point in selected
+        # and all the others
+        last_added = sample_inds[i-1]
+
+        dist_to_last_added_point = (
+            (points[last_added] - points[points_left])**2).sum(-1) # [P - i]
+
+        # If closer, updated distances
+        dists[points_left] = np.minimum(dist_to_last_added_point,
+                                        dists[points_left]) # [P - i]
+
+        # We want to pick the one that has the largest nearest neighbour
+        # distance to the sampled points
+        selected = np.argmax(dists[points_left])
+        sample_inds[i] = points_left[selected]
+
+        # Update points_left
+        points_left = np.delete(points_left, selected)
+
+    # return points[sample_inds]
+    # return sample_inds.tolist()
+    return sample_inds
 
 def read_next_bytes(fid, num_bytes, format_char_sequence, endian_character="<"):
     """Read and unpack the next bytes from a binary file.
@@ -594,10 +649,38 @@ def main(args):
             point_cloud *= scale
         scene.add_points("point_cloud", point_cloud, vert_color=colors, unlit=True)
 
+    if args.process_point_cloud_for_mask:
+        t0 = time.time()
+        index_pc = fps(point_cloud, 40000)
+        print("Finish FPS!")
+        print("Processing time:", time.time() - t0)
+
+        point_cloud = point_cloud[index_pc]
+        # point_cloud = point_cloud[::128,:]
+        print("Effecitve point number is: %d"%(point_cloud.shape[0]))
+        # pts_pc_dist = [(pts_plot[:,[i]] - point_cloud[:,[i]])**2 for i in range(3)]
+        # pts_pc_dist = (sum(pts_pc_dist))**(1/2)
+        # pts_plot = pts_plot.reshape(batch_size, n_samples, 3)
+        # pts_pc_dist = np.linalg.norm(pts_plot[:,:,None,:]-point_cloud[None,None,:,:], axis=3)
+        # pts_pc_dist = np.linalg.norm(pts_plot[:,None,:] - point_cloud[None,:,:], axis=2)
+        pts_pc_dist = efficient_dist_calc(pts_plot[:,None,:], point_cloud[None,:,:])
+
+        pts_pc_dist = pts_pc_dist.reshape(batch_size, n_samples, -1)
+        dist_min = pts_pc_dist.min(axis=2)
+        min_dist_value = dist_min.min(axis=1)
+        dist_mask = dist_min < min_dist_value[:,None] + 0.001
+        dist_mask = (~dist_mask)*0.001 + dist_mask*(-10000.)
+        dist_mask = np.cumsum(dist_mask, axis=1)
+        dist_mask = dist_mask > 0
+        dist_mask = dist_mask.reshape(-1,1)
+        colors = dist_mask*np.array([[1.,0.,0.]]) + (~dist_mask)*np.array([[0.,0.,1.]])
+        scene.add_points("dist_with_pc", pts_plot.reshape(-1,3), vert_color=colors, unlit=True)
+
+
 
     if  args.semantic_mask is not None:
-        sem_pts  = np.load("middle_npy/" +  args.semantic_mask + "_pts.npy")
-        sem_mask = np.load("middle_npy/" +  args.semantic_mask + "_sem_mask.npy")
+        sem_pts  = np.load("middle_npy_matching/" +  args.semantic_mask + "_pts.npy")
+        sem_mask = np.load("middle_npy_matching/" +  args.semantic_mask + "_sem_mask.npy")
         if len(sem_mask.shape) == 2:
             sem_mask = sem_mask[:,:,None]
 
@@ -660,6 +743,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--show_outside_color_only", action="store_true", default=False, help= "Displaying the inside colors"
+    )
+    parser.add_argument(
+        "--process_point_cloud_for_mask", action="store_true", default=False, help= "Processing the point cloud for semantic mask"
     )
     args = parser.parse_args()
 

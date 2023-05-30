@@ -502,19 +502,22 @@ def main(args):
         start_indice = np.arange(batch_size*n_samples)
         end_indice = np.arange(batch_size*n_samples) + batch_size*n_samples
         segs = np.stack([start_indice, end_indice],axis=1)
-        scene.add_lines("lines/{}".format(_idx_neigh),
-                        all_line_pts,
-                        segs = segs,
-                        # r=R,
-                        # t=t,
-                        color=np.random.random(3),
-                        # vert_color=np.random.random([batch_size*n_samples, 3])
-                        )
+        if args.plot_neighbor:
+            scene.add_lines("lines/{}".format(_idx_neigh),
+                            all_line_pts,
+                            segs = segs,
+                            # r=R,
+                            # t=t,
+                            color=np.random.random(3),
+                            # vert_color=np.random.random([batch_size*n_samples, 3])
+                            )
         ## tranform from world coordinate to image planes
         pts_img = np.matmul(P_w2img[[_idx_neigh],:,:], pts_flat[:,:, None])
         pts_img = pts_img.reshape(batch_size*n_samples, 3).squeeze()
         u_img = np.rint((pts_img[:,0]/pts_img[:,2])).astype(int)
         v_img = np.rint((pts_img[:,1]/pts_img[:,2])).astype(int)
+        print(u_img.max(), u_img.min(), v_img.max(), v_img.min())
+        print(all_images.shape)
 
         for u, v in zip(u_img.tolist(), v_img.tolist()):
             cv.circle(all_images[_idx_neigh], (u, v), radius=8, color=np.random.random(3)*255, thickness=-1)
@@ -592,6 +595,24 @@ def main(args):
         scene.add_points("point_cloud", point_cloud, vert_color=colors, unlit=True)
 
 
+    if  args.semantic_mask is not None:
+        sem_pts  = np.load("middle_npy/" +  args.semantic_mask + "_pts.npy")
+        sem_mask = np.load("middle_npy/" +  args.semantic_mask + "_sem_mask.npy")
+        if len(sem_mask.shape) == 2:
+            sem_mask = sem_mask[:,:,None]
+
+        batchsize, sample_points, _ = sem_mask.shape
+        sem_pts = sem_pts.reshape([batchsize, sample_points, -1])
+        colors = sem_mask*np.array([[1., 0, 0]]) + (~sem_mask)*np.array([[0,0,1.]])
+        colors = colors.reshape(-1, 3)
+        sem_pts = sem_pts.reshape(-1,3)
+        sem_mask = sem_mask.reshape(-1)
+        if args.show_outside_color_only:
+            scene.add_points("semantic_points", sem_pts[sem_mask], vert_color=colors[sem_mask], unlit=True)
+        else:
+            scene.add_points("semantic_points", sem_pts, vert_color=colors, unlit=True)
+
+
     out_dir = path.join(args.data_dir, "visual")
     scene.add_axes(length=1.0, visible=False)
     scene.add_sphere("Unit Sphere", visible=False)
@@ -626,10 +647,19 @@ if __name__ == "__main__":
         "--is_transform", action="store_true", default=False, help= "Doing transformation on point cloud and camera poses"
     )
     parser.add_argument(
+        "--plot_neighbor", action="store_true", default=False, help= "Doing transformation on point cloud and camera poses"
+    )
+    parser.add_argument(
         "--img_idx", type=int, default=-1, help= "the image index"
     )
     parser.add_argument(
         "--near_n_cameras", type=int, default=1, help= "the number of chosed camera poses"
+    )
+    parser.add_argument(
+        "--semantic_mask", type=str, default=None, help= "the number of chosed camera poses"
+    )
+    parser.add_argument(
+        "--show_outside_color_only", action="store_true", default=False, help= "Displaying the inside colors"
     )
     args = parser.parse_args()
 

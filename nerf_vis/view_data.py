@@ -443,7 +443,7 @@ def main(args):
 
     image_wh = get_image_size(path.join(images_dir, image_files[0]))
 
-    scene = Scene("colmap dataset: " + dataset_name)
+    scene = Scene("mask supervision dataset: " + dataset_name)
     scene.set_opencv()
 
     # Try to pick a good frustum size
@@ -644,6 +644,8 @@ def main(args):
         pc_translation = pc_scale_mat[:3,3]
         point_cloud -= pc_translation
         point_cloud /= radius
+
+
         if is_transform:
             point_cloud = (T[:3, :3] @ point_cloud[:, :, None])[:, :, 0] + T[:3, 3]
             point_cloud *= scale
@@ -679,8 +681,8 @@ def main(args):
 
 
     if  args.semantic_mask is not None:
-        sem_pts  = np.load("middle_npy_matching/" +  args.semantic_mask + "_pts.npy")
-        sem_mask = np.load("middle_npy_matching/" +  args.semantic_mask + "_sem_mask.npy")
+        sem_pts  = np.load("middle_npy/" +  args.semantic_mask + "_pts.npy")
+        sem_mask = np.load("middle_npy/" +  args.semantic_mask + "_sem_mask.npy")
         if len(sem_mask.shape) == 2:
             sem_mask = sem_mask[:,:,None]
 

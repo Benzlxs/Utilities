@@ -533,12 +533,13 @@ def main(args):
     pts_ad = np.concatenate([pts, one_mat[:,:,None]], axis=-1)
 
     # plot the camera ray
-    for bs in range(batch_size):
-        scene.add_line("rays/{}".format(bs),
-                       all_poses[img_idx,:3,3],
-                       pts[bs,-1,:],
-                       color=np.random.random(3),
-                       )
+    if args.z_val_array is None:
+        for bs in range(batch_size):
+            scene.add_line("rays/{}".format(bs),
+                           all_poses[img_idx,:3,3],
+                           pts[bs,-1,:],
+                           color=np.random.random(3),
+                          )
     pts_plot = pts.reshape(-1,3)
     pts_flat = pts_ad.reshape(-1,4)
     # plot the sampled pts to neighoring cameras
@@ -652,6 +653,7 @@ def main(args):
         scene.add_points("point_cloud", point_cloud, vert_color=colors, unlit=True)
 
     if args.process_point_cloud_for_mask:
+        print("Using point cloud for calculting mask")
         t0 = time.time()
         index_pc = fps(point_cloud, 40000)
         print("Finish FPS!")
@@ -681,6 +683,7 @@ def main(args):
 
 
     if  args.semantic_mask is not None:
+        print("Using semantic mask for calucalting mask")
         sem_pts  = np.load("middle_npy/" +  args.semantic_mask + "_pts.npy")
         sem_mask = np.load("middle_npy/" +  args.semantic_mask + "_sem_mask.npy")
         if len(sem_mask.shape) == 2:
@@ -696,6 +699,23 @@ def main(args):
             scene.add_points("semantic_points", sem_pts[sem_mask], vert_color=colors[sem_mask], unlit=True)
         else:
             scene.add_points("semantic_points", sem_pts, vert_color=colors, unlit=True)
+
+
+    if args.z_val_array is not None:
+        z_value_array = np.load(args.z_val_array + "/z_val_" + str(img_idx) + ".npy")
+        z_value_xy = z_value_array[pixels_y.tolist(), pixels_x.tolist()] # bs,*1
+        mask = z_vals < z_value_xy[:,None]
+        mask = mask.reshape(-1, 1)
+        colors = mask*np.array([[1., 0, 0]]) + (~mask)*np.array([[0,0,1.]])
+        colors = colors.reshape(-1, 3)
+        pts_plot = pts_plot.reshape(-1, 3)
+        mask = mask.reshape(-1)
+        if args.show_outside_color_only:
+            scene.add_points("z_val_array", pts_plot[mask], vert_color=colors[mask], unlit=True)
+        else:
+            scene.add_points("z_val_array", pts_plot, vert_color=colors, unlit=True)
+
+
 
 
     out_dir = path.join(args.data_dir, "visual")
@@ -748,6 +768,9 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--process_point_cloud_for_mask", action="store_true", default=False, help= "Processing the point cloud for semantic mask"
+    )
+    parser.add_argument(
+        "--z_val_array", type=str, default=None, help="path to z value array!"
     )
     args = parser.parse_args()
 

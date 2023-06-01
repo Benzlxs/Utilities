@@ -165,6 +165,9 @@ def main(args):
     point_cloud4 = np.concatenate([point_cloud, np.ones_like(point_cloud[:,[0]])], axis=-1)  # batch_size, 3
 
     for img_idx in range(n_imgs):
+        cur_pose =   all_poses[[img_idx], :3, 3]
+        dist_pc_cam = point_cloud - cur_pose
+        dist_pc_cam = (dist_pc_cam[:,0]**2 + dist_pc_cam[:,1]**2 + dist_pc_cam[:,2]**2)**(0.5)
         z_val_array = np.zeros([H_img, W_img])
         z_val_array[...] = LARGE_VALUE
         print("Process image: {};".format(img_idx))
@@ -180,14 +183,16 @@ def main(args):
         # v_img = v_img.clip(0, H_img - 1)
         u_img = u_img[projection_mask]
         v_img = v_img[projection_mask]
-        pts_z = pts_img[projection_mask, 2]
+        # pts_z = pts_img[projection_mask, 2]
+        pts_z = dist_pc_cam[projection_mask]
+
 
         uv_img_num = len(u_img)
 
         for i_uv in range(uv_img_num):
             z_val_array[v_img[i_uv], u_img[i_uv]] = min(z_val_array[v_img[i_uv], u_img[i_uv]],  pts_z[i_uv])
 
-        z_val_array = np.where(z_val_array == LARGE_VALUE, -1., z_val_array)
+        z_val_array = np.where(z_val_array == LARGE_VALUE, 0., z_val_array)
         np.save("z_val_npy/z_val_%d.npy"%img_idx, z_val_array)
 
         # change z_val_array into heat map

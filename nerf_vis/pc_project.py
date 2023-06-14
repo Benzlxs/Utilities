@@ -154,13 +154,41 @@ def main(args):
     pcd = o3d.io.read_point_cloud(point_cloud_path)
     point_cloud = np.asarray(pcd.points)
     colors = np.asarray(pcd.colors)
+    normals= np.array(pcd.normals)
     pc_scale_mat = scale_mats_np[0]
     radius = pc_scale_mat[0,0]
     pc_translation = pc_scale_mat[:3,3]
     point_cloud -= pc_translation
     point_cloud /= radius
+    # import trimesh
+    # cloud = trimesh.PointCloud(point_cloud)
+    # cloud.convex_hull
+    # cloud.export("test.ply")
 
     # point_cloud = point_cloud[::10,:]
+    ## construct the mesh
+    pcd_m = o3d.geometry.PointCloud()
+    pcd_m.points = o3d.utility.Vector3dVector(point_cloud[::10,:])
+    pcd_m.colors = o3d.utility.Vector3dVector(colors[::10,:])
+    pcd_m.normals = o3d.utility.Vector3dVector(normals[::10,:])
+    pcd = pcd_m
+    distances = pcd.compute_nearest_neighbor_distance()
+    avg_dist = np.mean(distances)
+    radius = 2 * avg_dist
+    # bpa_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(pcd,o3d.utility.DoubleVector([radius, radius * 2, radius * 4, radius * 8, radius * 16]))
+    # bpa_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_alpha_shape(pcd, 0.01)
+    bpa_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=9 , width=0, scale=1.1, linear_fit=False)[0]
+    o3d.io.write_triangle_mesh("bpa_mesh.ply", bpa_mesh)
+
+
+
+    pc_scale_mat = scale_mats_np[0]
+    radius = pc_scale_mat[0,0]
+    pc_translation = pc_scale_mat[:3,3]
+    ## referring to the line 385 in exp_runner.py code
+    point_cloud -= pc_translation
+    point_cloud /= radius
+
 
     point_cloud4 = np.concatenate([point_cloud, np.ones_like(point_cloud[:,[0]])], axis=-1)  # batch_size, 3
 
@@ -186,6 +214,8 @@ def main(args):
         # pts_z = pts_img[projection_mask, 2]
         pts_z = dist_pc_cam[projection_mask]
 
+        masked_point_cloud = point_cloud[projection_mask, :]
+
 
         uv_img_num = len(u_img)
 
@@ -193,7 +223,7 @@ def main(args):
             z_val_array[v_img[i_uv], u_img[i_uv]] = min(z_val_array[v_img[i_uv], u_img[i_uv]],  pts_z[i_uv])
 
         z_val_array = np.where(z_val_array == LARGE_VALUE, 0., z_val_array)
-        np.save("z_val_npy/z_val_%d.npy"%img_idx, z_val_array)
+        np.save("z_val_npy/%03d.npy"%img_idx, z_val_array)
 
         # change z_val_array into heat map
         rgb_img = all_images[img_idx]

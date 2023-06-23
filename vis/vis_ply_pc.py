@@ -51,7 +51,8 @@ if __name__ == "__main__":
     y1 = points[:,1].max()
     # points = points[points[:,2] > z0 + 1.6, :]
     # points = points[points[:,2] < z1 - 6.6, :]
-    index = (points[:,0] > x0 + 10.) & (points[:,0] < x1 - 20.) & (points[:, 1] > y0 + 20. ) & (points[:,1] < y1 - 8)
+    # index = (points[:,0] > x0 + 10.) & (points[:,0] < x1 - 15.) & (points[:, 1] > y0 + 20. ) & (points[:,1] < y1 - 8)
+    index = points[:,0] > x0
     # points = points[points[:,0] > x0 + 10.0, :]
     # points = points[points[:,0] < x1 - 20., :]
     # points = points[points[:,1] > y0 + 15.0, :]
@@ -87,6 +88,7 @@ if __name__ == "__main__":
 
     vis.get_render_option().point_size = points_size  # set points size
     vis.add_geometry(pcd)
+    vis.background_color = np.asarray([0.,0.,0.])
     # ctr = vis.get_view_control()
     # ctr.change_field_of_view(step=00.)
     # ctr.rotate(10.0, 10.)
@@ -97,7 +99,8 @@ if __name__ == "__main__":
     # o3d.visualization.draw_geometries_with_animation_callback([pcd], rotate_view)
     vis.run()
     # vis.register_animation_callback(rotate_view)
-    img_name = 'x_' + str(flags.rx) + '_y_' + str(flags.ry) + '_z_' + str(flags.rz) + '_scale_' + str(flags.scale) + '.png'
+    # img_name = 'x_' + str(flags.rx) + '_y_' + str(flags.ry) + '_z_' + str(flags.rz) + '_scale_' + str(flags.scale) + '.png'
+    img_name = flags.lidarfile.split('/')[-1][:-4] +  'x_' + str(flags.rx) + '_y_' + str(flags.ry) + '_z_' + str(flags.rz) + '_scale_' + str(flags.scale) + '.png'
     vis.capture_screen_image(img_name)
     vis.destroy_window()
     # o3d.visualization.draw_geometries([pcd])

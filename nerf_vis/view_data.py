@@ -684,8 +684,8 @@ def main(args):
 
     if  args.semantic_mask is not None:
         print("Using semantic mask for calucalting mask")
-        sem_pts  = np.load("middle_npy/" +  args.semantic_mask + "_pts.npy")
-        sem_mask = np.load("middle_npy/" +  args.semantic_mask + "_sem_mask.npy")
+        sem_pts  = np.load(args.semantic_mask + "_pts.npy")
+        sem_mask = np.load(args.semantic_mask + "_sem_mask.npy")
         if len(sem_mask.shape) == 2:
             sem_mask = sem_mask[:,:,None]
 
@@ -702,7 +702,8 @@ def main(args):
 
 
     if args.z_val_array is not None:
-        z_value_array = np.load(args.z_val_array + "/z_val_" + str(img_idx) + ".npy")
+        z_value_array = np.load(args.z_val_array + "/z_val_" + "%03d"%(img_idx) + ".npy")
+        z_value_array = np.where(z_value_array==65535., 0., z_value_array)
         z_value_xy = z_value_array[pixels_y.tolist(), pixels_x.tolist()] # bs,*1
         mask = z_vals < z_value_xy[:,None]
         mask = mask.reshape(-1, 1)

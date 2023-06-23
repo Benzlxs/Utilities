@@ -56,8 +56,8 @@ def add_noise_func(img_input, noise_type='gaussian', save=True):
         raise NotImplementedError("the noise type has not been implimented!")
 
     if save:
-        cv.imwrite('raw_gray.png', img_input * 255.)
-        cv.imwrite('noisy_gray.png', noisy_img * 255.)
+        cv.imwrite('raw_gray.png', img_input)
+        cv.imwrite('noisy_gray.png', noisy_img)
     return noisy_img
 
 

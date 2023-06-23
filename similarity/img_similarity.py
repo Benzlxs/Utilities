@@ -22,16 +22,16 @@ def add_noise_func(img_input, noise_type='gaussian', save=True):
     img = np.copy(img_input)
     height, width = img.shape
     if noise_type == 'gaussian':
-        mean = 0.0
+        mean = 0.1
         std = 0.1
-        noise = np.random.normal(mean, std, img_1_gray.shape)
+        noise = np.random.normal(mean, std, img.shape).astype(np.float32)
         noisy_img = img + noise
     elif noise_type == 'slat':
         probability = 0.1
         num_pixels = int(probability * height * width)
         indices = np.random.choice(range(height * width), num_pixels, replace=False)
         img = img.reshape(-1)
-        img[indices] = 0.
+        img[indices] = 0.3
         noisy_img = img.reshape(height, width)
     elif noise_type == 'possion':
         noisy_img = np.random.poisson(img)
@@ -104,7 +104,7 @@ def main(args):
 
     with_noise = True
     if with_noise:
-        img_1_gray = add_noise_func(img_1_gray, noise_type='slat')
+        img_1_gray = add_noise_func(img_1_gray, noise_type='gaussian')
 
     ref_gray = img_0_gray.reshape(1,1,-1,1)
     ref_gray = torch.from_numpy(ref_gray)

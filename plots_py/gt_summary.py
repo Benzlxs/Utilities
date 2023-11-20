@@ -24,7 +24,10 @@ def plot_results(results_root ,str_name, var_list=["01"]):
             all_results.append(value)
             alL_dates.append(x_days[key])
         x = list(np.arange(len(alL_dates)))
-        plt.plot(x, all_results,  color=color_maps[var], linestyle='-', linewidth=1, marker='o', markersize=10, label=key2names[var])
+        if "pc" in var:
+            plt.plot(x, all_results,  color=color_maps[var], linestyle='-', linewidth=1, marker='o', markersize=10, label=key2names[var])
+        else:
+            plt.plot(x, all_results,  color=color_maps[var], linestyle='-.', linewidth=1, marker='*', markersize=10, label=key2names[var])
     dates = results_dict.keys()
     plt.xticks(x, dates)
     plt.xlabel("Date")
@@ -41,7 +44,7 @@ if __name__ == "__main__":
     results_root = "./figs"
     results_root = Path(results_root)
     results_root.mkdir(parents=True, exist_ok=True)
-    plot_results(results_root, "our_method", var_list=["ours", "bionet", "dgcnn"])
+    plot_results(results_root, "our_method", var_list=["ours_pc", "bionet_pc", "dgcnn_pc", "ours_neff", "bionet_neff", "dgcnn_neff"])
 
 
 

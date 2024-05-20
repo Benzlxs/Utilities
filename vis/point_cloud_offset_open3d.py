@@ -1,7 +1,7 @@
 import numpy as np
 import open3d as o3d
 from concurrent.futures import ThreadPoolExecutor
-import sys
+import sys, os
 
 def main(points, offsets):
     num_points = points.shape[0]
@@ -44,8 +44,16 @@ def main(points, offsets):
 
 if __name__=="__main__":
     xyz_npy_path = sys.argv[1]
+    print("xyz file:", xyz_npy_path)
     d_offset_npy_path = xyz_npy_path.replace("_xyz.","_d_offset.")
     points = np.load(xyz_npy_path)
-    offset_points = points + np.load(d_offset_npy_path)
+    if os.path.isfile(d_offset_npy_path):
+        print("offset_file:", d_offset_npy_path)
+        offset_points = points + np.load(d_offset_npy_path)
+    else:
+        moved_npy_path = xyz_npy_path.replace("_xyz.", "_moved.")
+        print("moved points:", moved_npy_path)
+        print(moved_npy_path)
+        offset_points = np.load(moved_npy_path)
     main(points, offset_points)
 
